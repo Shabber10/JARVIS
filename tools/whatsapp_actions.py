@@ -69,6 +69,8 @@ def _get_whatsapp_hwnd() -> Optional[int]:
                 buf = ctypes.create_unicode_buffer(length + 1)
                 user32.GetWindowTextW(hwnd, buf, length + 1)
                 title = buf.value
+                if "antigravity" in title.lower():
+                    return True
                 if "whatsapp" in title.lower():
                     pid = ctypes.c_ulong()
                     user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
@@ -90,7 +92,7 @@ def _get_whatsapp_hwnd() -> Optional[int]:
         return None
 
 def _focus_whatsapp():
-    """Brings WhatsApp to foreground using Win32 AttachThreadInput and SetForegroundWindow."""
+    """Brings WhatsApp to foreground using Win32 Alt unlock, AttachThreadInput and SetForegroundWindow."""
     _ensure_default_desktop()
     hwnd = _get_whatsapp_hwnd()
     if hwnd and user32:
@@ -102,11 +104,14 @@ def _focus_whatsapp():
             if fg_tid and fg_tid != cur_tid:
                 user32.AttachThreadInput(cur_tid, fg_tid, True)
                 
+            # Simulate Alt key to bypass Windows SetForegroundWindow lock
+            user32.keybd_event(0x12, 0, 0, 0)
             user32.ShowWindow(hwnd, 9) # SW_RESTORE
             user32.ShowWindow(hwnd, 3) # SW_MAXIMIZE
             user32.SetForegroundWindow(hwnd)
             user32.BringWindowToTop(hwnd)
             user32.SwitchToThisWindow(hwnd, True)
+            user32.keybd_event(0x12, 0, 2, 0) # Release Alt
             
             if fg_tid and fg_tid != cur_tid:
                 user32.AttachThreadInput(cur_tid, fg_tid, False)
@@ -293,6 +298,10 @@ def _open_chat(recipient: str) -> Tuple[bool, str]:
     _focus_whatsapp()
     time.sleep(0.4)
     
+    # Ensure any right-sidebar or overlay is closed so chat header icons are full width
+    _press_key_native(VK_ESCAPE)
+    time.sleep(0.2)
+    
     # If phone number is known, use protocol for instant direct open
     if target_phone:
         try:
@@ -306,9 +315,9 @@ def _open_chat(recipient: str) -> Tuple[bool, str]:
 
     # Search contact name / group name
     try:
-        # 1. Click Search Bar at (250, 140)
-        _native_click(250, 140)
-        time.sleep(0.15)
+        # 1. Click Search Bar at (200, 140)
+        _native_click(200, 140)
+        time.sleep(0.2)
         
         # Clear search
         pyautogui.hotkey('ctrl', 'a')
@@ -321,11 +330,11 @@ def _open_chat(recipient: str) -> Tuple[bool, str]:
         _press_key_with_ctrl('v')
         time.sleep(1.2)
         
-        # 2. Click top result at (250, 320) and hit Enter
-        _native_click(250, 320)
-        time.sleep(0.4)
+        # 2. Click top result at (250, 260) and hit Enter
+        _native_click(250, 260)
+        time.sleep(0.3)
         _press_enter_native()
-        time.sleep(1.0)
+        time.sleep(1.2)
         
         return True, display_name
     except Exception as e:
@@ -373,64 +382,34 @@ def send_whatsapp_message(recipient: str, message: str = "") -> str:
     if clean_recipient.lower() in generic_names:
         try:
             from core.voice_out import speak
-            from core.voice_in import listen
-            speak("Who would you like to message on WhatsApp, Boss?")
-            heard_recipient = listen(timeout=7)
-            if heard_recipient:
-                clean_recipient = heard_recipient.strip()
+            speak("Who would you like to send this message to, Boss?")
         except Exception:
             pass
-
-    if clean_recipient.lower() in generic_names or not clean_recipient:
-        return "Who would you like to send the WhatsApp message to, Boss? Please specify a contact name or phone number."
+        return "Please specify the contact name or phone number, Boss."
 
     if not clean_message:
         try:
             from core.voice_out import speak
-            from core.voice_in import listen
             speak(f"What message would you like to send to {clean_recipient}, Boss?")
-            heard_msg = listen(timeout=8)
-            if heard_msg:
-                clean_message = heard_msg.strip()
         except Exception:
             pass
+        return f"Please provide the message text to send to {clean_recipient}, Boss."
 
-    if not clean_message:
-        return f"What message would you like me to send to {clean_recipient}, Boss?"
-
-    display_name, target_phone = _resolve_recipient(clean_recipient)
-
-    # If direct phone number, launch prefilled URL
-    if target_phone:
-        try:
-            encoded_text = urllib.parse.quote(clean_message)
-            uri = f"whatsapp://send?phone={target_phone}&text={encoded_text}"
-            subprocess.Popen(f'start "" "{uri}"', shell=True, creationflags=CREATE_NO_WINDOW)
-            time.sleep(3.2)
-            _focus_whatsapp()
-            time.sleep(0.3)
-            _trigger_send_action()
-            time.sleep(0.5)
-            return f"Successfully sent WhatsApp message to {display_name} (+{target_phone}): \"{clean_message}\", Boss."
-        except Exception:
-            pass
-
-    # Method 2: Contact / Group Search
     try:
         ok, name = _open_chat(clean_recipient)
         if not ok:
-            return f"Could not find or open chat for {clean_recipient}, Boss."
-            
-        # Focus composer at (700, 955)
-        _native_click(700, 955)
+            return f"Could not open WhatsApp chat for {clean_recipient}, Boss."
+
+        # Click message input bar at (700, 1020)
+        _native_click(700, 1020)
         time.sleep(0.2)
-        
-        # Paste message text
+
+        # Paste message via clipboard
         _set_clipboard(clean_message)
         _press_key_with_ctrl('v')
-        time.sleep(0.4)
-        
-        # Send
+        time.sleep(0.3)
+
+        # Trigger send
         _trigger_send_action()
         time.sleep(0.5)
         return f"Successfully sent WhatsApp message to {name}: \"{clean_message}\", Boss."
@@ -482,7 +461,7 @@ def start_whatsapp_call(recipient: str, call_type: str = "voice") -> str:
     """
     Initiates a WhatsApp voice call or video call with a contact.
     call_type: 'voice' (default) or 'video'
-    Example: start_whatsapp_call("Arb Subhan", "voice")
+    Example: start_whatsapp_call("Arb Subhan", "video")
     """
     clean_recipient = recipient.strip()
     is_video = "vid" in call_type.lower()
@@ -493,16 +472,19 @@ def start_whatsapp_call(recipient: str, call_type: str = "voice") -> str:
         if not ok:
             return f"Could not open WhatsApp chat for {clean_recipient}, Boss."
 
-        time.sleep(0.8)
+        time.sleep(1.0)
         # WhatsApp Call header icons in 1920x1080 maximized:
         # Video Call: (1665, 80)
-        # Voice Call: (1725, 80)
-        if is_video:
-            _native_click(1665, 80)
-        else:
-            _native_click(1725, 80)
+        # Voice Call: (1730, 80)
+        target_x = 1665 if is_video else 1730
+        target_y = 80
+        
+        # Dual trigger to guarantee click registration on Windows desktop
+        _native_click(target_x, target_y)
+        time.sleep(0.1)
+        pyautogui.click(target_x, target_y)
 
-        time.sleep(0.5)
+        time.sleep(1.5)
         return f"Initiated WhatsApp {call_label} with {display_name}, Boss."
     except Exception as e:
         return f"Could not initiate {call_label} with {recipient}: {e}"
