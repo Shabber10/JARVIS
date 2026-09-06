@@ -1,7 +1,8 @@
 """
-JARVIS Siri/Gemini-Style Floating HUD Overlay
-A sleek, modern, dark-themed floating overlay widget with real-time audio visualizer,
-subtitles, microphone toggle, and permanent hangup / power-off controls.
+JARVIS Iron Man Holographic HUD Overlay
+Authentic Tony Stark Mark VI/VII Arc Reactor center-screen translucent HUD.
+Features real-time audio visualizer, rotating holographic radar ticks, telemetry subtitles,
+smooth rounded pill buttons (Stop, Talk, Turn Off), and one-click permanent shutdown.
 """
 
 import sys
@@ -10,7 +11,9 @@ import time
 import queue
 import threading
 import tkinter as tk
+from pathlib import Path
 from typing import Optional, Callable
+from PIL import Image, ImageTk
 
 # State constants
 STATE_IDLE = "idle"
@@ -18,6 +21,18 @@ STATE_LISTENING = "listening"
 STATE_THINKING = "thinking"
 STATE_SPEAKING = "speaking"
 STATE_OFFLINE = "offline"
+
+# Color Palette - Iron Man Holographic Glass
+BG_GLASS = "#060d14"
+BORDER_DARK = "#003344"
+CYAN = "#00f0ff"
+DARK_CYAN = "#004455"
+GOLD = "#ffb300"
+PURPLE = "#c084fc"
+RED = "#ef4444"
+TEXT_WHITE = "#f0f9ff"
+TEXT_MUTED = "#64748b"
+
 
 class JarvisOverlayUI:
     def __init__(
@@ -32,8 +47,8 @@ class JarvisOverlayUI:
 
         self.event_queue = queue.Queue()
         self.state = STATE_IDLE
-        self.status_text = "Ready"
-        self.subtitle_text = "Say 'Hey Jarvis' or click mic to start"
+        self.status_text = "● PROTOCOL: STANDBY // READY"
+        self.subtitle_text = "Say 'Hey Jarvis' or click Talk to begin..."
         self.is_running = True
         self.is_hidden = False
         self.anim_frame = 0
@@ -42,6 +57,7 @@ class JarvisOverlayUI:
         self._drag_start_x = 0
         self._drag_start_y = 0
         self._auto_hide_id = None
+        self._reactor_img_tk = None
 
     def start(self):
         """Starts the UI in a dedicated GUI thread."""
@@ -61,216 +77,67 @@ class JarvisOverlayUI:
                 pass
 
         self.root = tk.Tk()
-        self.root.title("JARVIS AI")
+        self.root.title("JARVIS HUD")
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
         
-        # Color Palette - Sleek Dark Theme
-        self.BG_MAIN = "#12141a"
-        self.BG_CARD = "#191d26"
-        self.BORDER_COLOR = "#2a3142"
-        self.ACCENT_CYAN = "#00e5ff"
-        self.ACCENT_BLUE = "#3b82f6"
-        self.ACCENT_PURPLE = "#a855f7"
-        self.ACCENT_RED = "#ef4444"
-        self.TEXT_PRIMARY = "#f8fafc"
-        self.TEXT_SECONDARY = "#94a3b8"
-        self.TEXT_MUTED = "#64748b"
+        # Authentic Iron Man Visor translucent glassmorphism
+        try:
+            self.root.attributes("-alpha", 0.86)
+        except Exception:
+            pass
 
-        # Window dimensions & positioning (Bottom-Right of screen)
-        width = 330
-        height = 420
+        # Window dimensions & positioning (Centered on screen)
+        width = 420
+        height = 520
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
-        pos_x = screen_width - width - 35
-        pos_y = screen_height - height - 70
+        pos_x = (screen_width - width) // 2
+        pos_y = (screen_height - height) // 2
 
         self.root.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
-        self.root.configure(bg=self.BG_MAIN)
+        self.root.configure(bg=BG_GLASS)
 
-        # Build Main Canvas with rounded border
-        self.canvas_bg = tk.Canvas(
+        # Build Main Sci-Fi Canvas
+        self.canvas = tk.Canvas(
             self.root,
             width=width,
             height=height,
-            bg=self.BG_MAIN,
+            bg=BG_GLASS,
             highlightthickness=0
         )
-        self.canvas_bg.pack(fill="both", expand=True)
+        self.canvas.pack(fill="both", expand=True)
 
-        # Draw card container
-        self._draw_rounded_rect(
-            self.canvas_bg, 4, 4, width - 4, height - 4,
-            radius=24,
-            fill=self.BG_CARD,
-            outline=self.BORDER_COLOR,
-            width=2
-        )
+        # Enable window dragging by top header area
+        self.canvas.bind("<ButtonPress-1>", self._on_drag_start)
+        self.canvas.bind("<B1-Motion>", self._on_drag_motion)
 
-        # Top Header Bar (Draggable)
-        self.header_frame = tk.Frame(self.root, bg=self.BG_CARD)
-        self.header_frame.place(x=16, y=14, width=width - 32, height=36)
-        
-        # Header Drag Bindings
-        self.header_frame.bind("<ButtonPress-1>", self._on_drag_start)
-        self.header_frame.bind("<B1-Motion>", self._on_drag_motion)
-        
-        # Logo / Glow indicator
-        self.logo_canvas = tk.Canvas(self.header_frame, width=22, height=22, bg=self.BG_CARD, highlightthickness=0)
-        self.logo_canvas.pack(side="left", padx=(0, 6))
-        self.logo_dot = self.logo_canvas.create_oval(3, 3, 19, 19, fill=self.ACCENT_CYAN, outline="")
-        self.logo_canvas.bind("<ButtonPress-1>", self._on_drag_start)
-        self.logo_canvas.bind("<B1-Motion>", self._on_drag_motion)
+        # Load Triangular Arc Reactor Asset
+        asset_path = Path(__file__).resolve().parent.parent / "data" / "arc_reactor_hud.png"
+        if asset_path.exists():
+            try:
+                pil_img = Image.open(asset_path)
+                self._reactor_img_tk = ImageTk.PhotoImage(pil_img)
+            except Exception:
+                self._reactor_img_tk = None
 
-        # Title Label
-        self.title_lbl = tk.Label(
-            self.header_frame,
-            text="JARVIS AI",
-            font=("Segoe UI", 11, "bold"),
-            fg=self.TEXT_PRIMARY,
-            bg=self.BG_CARD
-        )
-        self.title_lbl.pack(side="left", padx=2)
-        self.title_lbl.bind("<ButtonPress-1>", self._on_drag_start)
-        self.title_lbl.bind("<B1-Motion>", self._on_drag_motion)
+        # Bind Rounded Button Click Events on Canvas
+        self.canvas.tag_bind("btn_stop", "<Button-1>", lambda e: self._handle_stop_click())
+        self.canvas.tag_bind("btn_talk", "<Button-1>", lambda e: self._handle_mic_click())
+        self.canvas.tag_bind("btn_turnoff", "<Button-1>", lambda e: self._handle_hangup_click())
 
-        # Language / Mode pill
-        self.lang_badge = tk.Label(
-            self.header_frame,
-            text="ONLINE",
-            font=("Segoe UI", 8, "bold"),
-            fg=self.ACCENT_CYAN,
-            bg="#0f2b38",
-            padx=6,
-            pady=1
-        )
-        self.lang_badge.pack(side="left", padx=6)
+        # Bind Hover Hand Cursors for Rounded Buttons
+        for tag in ["btn_stop", "btn_talk", "btn_turnoff"]:
+            self.canvas.tag_bind(tag, "<Enter>", lambda e: self.canvas.config(cursor="hand2"))
+            self.canvas.tag_bind(tag, "<Leave>", lambda e: self.canvas.config(cursor=""))
 
-        # Close / Minimize buttons
-        self.btn_minimize = tk.Button(
-            self.header_frame,
-            text="─",
-            font=("Segoe UI", 9, "bold"),
-            fg=self.TEXT_SECONDARY,
-            bg=self.BG_CARD,
-            activeforeground=self.TEXT_PRIMARY,
-            activebackground=self.BORDER_COLOR,
-            relief="flat",
-            bd=0,
-            cursor="hand2",
-            command=self.toggle_hide
-        )
-        self.btn_minimize.pack(side="right", padx=2)
-
-        # Center Visualizer Orb Canvas
-        self.orb_size = 140
-        self.orb_canvas = tk.Canvas(
-            self.root,
-            width=self.orb_size,
-            height=self.orb_size,
-            bg=self.BG_CARD,
-            highlightthickness=0
-        )
-        self.orb_canvas.place(x=(width - self.orb_size) // 2, y=60)
-        self.orb_canvas.bind("<ButtonPress-1>", self._on_orb_click)
-
-        # Status Label (e.g. "Listening...", "Speaking...")
-        self.lbl_status = tk.Label(
-            self.root,
-            text=self.status_text,
-            font=("Segoe UI", 12, "bold"),
-            fg=self.ACCENT_CYAN,
-            bg=self.BG_CARD
-        )
-        self.lbl_status.place(x=16, y=205, width=width - 32)
-
-        # Subtitle / Response text box
-        self.lbl_subtitle = tk.Label(
-            self.root,
-            text=self.subtitle_text,
-            font=("Segoe UI", 9),
-            fg=self.TEXT_SECONDARY,
-            bg=self.BG_CARD,
-            wraplength=width - 40,
-            justify="center",
-            height=3
-        )
-        self.lbl_subtitle.place(x=20, y=232, width=width - 40)
-
-        # Action Control Panel (Bottom)
-        self.controls_frame = tk.Frame(self.root, bg=self.BG_CARD)
-        self.controls_frame.place(x=20, y=305, width=width - 40, height=85)
-
-        # 1. Stop / Interrupt Button
-        self.btn_stop = tk.Button(
-            self.controls_frame,
-            text="⏸",
-            font=("Segoe UI", 13),
-            fg=self.TEXT_PRIMARY,
-            bg="#262b38",
-            activeforeground="#ffffff",
-            activebackground="#374151",
-            relief="flat",
-            bd=0,
-            width=4,
-            height=2,
-            cursor="hand2",
-            command=self._handle_stop_click
-        )
-        self.btn_stop.pack(side="left", padx=10, pady=8)
-
-        # 2. Main Microphone Button (Large Pulsing Action)
-        self.btn_mic = tk.Button(
-            self.controls_frame,
-            text="🎙️",
-            font=("Segoe UI", 16, "bold"),
-            fg="#ffffff",
-            bg=self.ACCENT_BLUE,
-            activeforeground="#ffffff",
-            activebackground=self.ACCENT_CYAN,
-            relief="flat",
-            bd=0,
-            width=4,
-            height=2,
-            cursor="hand2",
-            command=self._handle_mic_click
-        )
-        self.btn_mic.pack(side="left", padx=12, pady=4)
-
-        # 3. Hangup / Power Off Button (Red - Permanent Shutdown)
-        self.btn_hangup = tk.Button(
-            self.controls_frame,
-            text="📞",
-            font=("Segoe UI", 15, "bold"),
-            fg="#ffffff",
-            bg=self.ACCENT_RED,
-            activeforeground="#ffffff",
-            activebackground="#b91c1c",
-            relief="flat",
-            bd=0,
-            width=4,
-            height=2,
-            cursor="hand2",
-            command=self._handle_hangup_click
-        )
-        self.btn_hangup.pack(side="right", padx=10, pady=8)
-
-        # Sub-labels for controls
-        self.ctrl_labels = tk.Label(
-            self.root,
-            text="Stop            Talk            Hangup",
-            font=("Segoe UI", 7, "bold"),
-            fg=self.TEXT_MUTED,
-            bg=self.BG_CARD
-        )
-        self.ctrl_labels.place(x=20, y=390, width=width - 40)
-
-        # Start periodic tick for animations and event queue processing
+        # Auto-hide after 3.5s of initial greeting
         self._schedule_auto_hide(delay_ms=3500)
         self._periodic_tick()
         self.root.mainloop()
 
-    def _draw_rounded_rect(self, canvas, x1, y1, x2, y2, radius=25, **kwargs):
+    def _draw_rounded_pill(self, x1, y1, x2, y2, radius=18, tag=None, **kwargs):
+        """Draws a smooth rounded pill polygon directly on the canvas."""
         points = [
             x1 + radius, y1,
             x2 - radius, y1,
@@ -285,19 +152,47 @@ class JarvisOverlayUI:
             x1, y1 + radius,
             x1, y1
         ]
-        return canvas.create_polygon(points, **kwargs, smooth=True)
+        if tag:
+            kwargs["tags"] = tag
+        return self.canvas.create_polygon(points, **kwargs, smooth=True)
+
+    def _draw_hud_frame(self, x1, y1, x2, y2, cut=20):
+        """Draws Iron Man angular chamfered HUD border frame with golden corner brackets."""
+        points = [
+            x1 + cut, y1,
+            x2 - cut, y1,
+            x2, y1 + cut,
+            x2, y2 - cut,
+            x2 - cut, y2,
+            x1 + cut, y2,
+            x1, y2 - cut,
+            x1, y1 + cut,
+            x1 + cut, y1
+        ]
+        self.canvas.create_polygon(points, outline=BORDER_DARK, fill="#050c14", width=2)
+        
+        # Neon edge lines
+        self.canvas.create_line(x1 + cut, y1, x2 - cut, y1, fill=CYAN, width=2)
+        self.canvas.create_line(x1 + cut, y2, x2 - cut, y2, fill=CYAN, width=2)
+        self.canvas.create_line(x1, y1 + cut, x1, y2 - cut, fill=CYAN, width=2)
+        self.canvas.create_line(x2, y1 + cut, x2, y2 - cut, fill=CYAN, width=2)
+
+        # Golden sci-fi brackets
+        blen = 24
+        self.canvas.create_line(x1 + cut, y1 + 6, x1 + cut + blen, y1 + 6, fill=GOLD, width=1.5)
+        self.canvas.create_line(x2 - cut, y1 + 6, x2 - cut - blen, y1 + 6, fill=GOLD, width=1.5)
 
     def _on_drag_start(self, event):
-        self._drag_start_x = event.x
-        self._drag_start_y = event.y
+        # Allow dragging if clicking in the upper region of HUD
+        if event.y < 70:
+            self._drag_start_x = event.x
+            self._drag_start_y = event.y
 
     def _on_drag_motion(self, event):
-        x = self.root.winfo_x() + (event.x - self._drag_start_x)
-        y = self.root.winfo_y() + (event.y - self._drag_start_y)
-        self.root.geometry(f"+{x}+{y}")
-
-    def _on_orb_click(self, event):
-        self._handle_mic_click()
+        if self.root and event.y < 70:
+            x = self.root.winfo_x() + (event.x - self._drag_start_x)
+            y = self.root.winfo_y() + (event.y - self._drag_start_y)
+            self.root.geometry(f"+{x}+{y}")
 
     def _handle_mic_click(self):
         if self.on_mic_click:
@@ -307,27 +202,16 @@ class JarvisOverlayUI:
         if self.on_stop_click:
             threading.Thread(target=self.on_stop_click, daemon=True).start()
         else:
-            self.set_state(STATE_IDLE, "Stopped", "Playback paused")
+            self.set_state(STATE_IDLE, "● PROTOCOL: PAUSED", "Audio playback halted.")
 
     def _handle_hangup_click(self):
-        self.set_state(STATE_OFFLINE, "Shutting Down...", "Permanent offline command initiated")
+        """Permanent shutdown of Jarvis."""
+        self.set_state(STATE_OFFLINE, "● PROTOCOL: TERMINATED // OFFLINE", "Jarvis shutting down permanently...")
         if self.on_hangup_click:
             threading.Thread(target=self.on_hangup_click, daemon=True).start()
 
-    def toggle_hide(self):
-        """Minimizes/Hides or Restores overlay."""
-        if not self.root:
-            return
-        if self.is_hidden:
-            self.root.deiconify()
-            self.is_hidden = False
-            self.btn_minimize.configure(text="─")
-        else:
-            self.root.withdraw()
-            self.is_hidden = True
-
     def show(self):
-        """Ensures the window is visible, unminimized, topmost, and raised above all applications."""
+        """Pops up the window in the center of the screen, topmost over all applications."""
         self._cancel_auto_hide()
         if self.root:
             try:
@@ -342,7 +226,6 @@ class JarvisOverlayUI:
                         import ctypes
                         user32 = ctypes.windll.user32
                         hwnd = self.root.winfo_id()
-                        # HWND_TOPMOST = -1, SWP_NOMOVE = 0x0002, SWP_NOSIZE = 0x0001, SWP_SHOWWINDOW = 0x0040
                         user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040)
                         user32.SetForegroundWindow(hwnd)
                     except Exception:
@@ -351,7 +234,7 @@ class JarvisOverlayUI:
                 pass
 
     def hide(self):
-        """Hides/withdraws the window into the background when inactive."""
+        """Hides the overlay into background when idle."""
         self._cancel_auto_hide()
         if self.root:
             try:
@@ -361,14 +244,12 @@ class JarvisOverlayUI:
                 pass
 
     def _schedule_auto_hide(self, delay_ms: int = 3000):
-        """Schedules the overlay to auto-hide after inactivity delay."""
         if not self.root:
             return
         self._cancel_auto_hide()
         self._auto_hide_id = self.root.after(delay_ms, self._do_auto_hide)
 
     def _cancel_auto_hide(self):
-        """Cancels any pending auto-hide timer."""
         if self.root and self._auto_hide_id:
             try:
                 self.root.after_cancel(self._auto_hide_id)
@@ -377,7 +258,6 @@ class JarvisOverlayUI:
             self._auto_hide_id = None
 
     def _do_auto_hide(self):
-        """Executes auto-hide if system is currently idle."""
         self._auto_hide_id = None
         if self.state in [STATE_IDLE, STATE_OFFLINE]:
             self.hide()
@@ -385,7 +265,7 @@ class JarvisOverlayUI:
     # ---------------- Thread-Safe API ----------------
 
     def set_state(self, state: str, status_text: str = None, subtitle_text: str = None):
-        """Thread-safe method to update overlay state and messages."""
+        """Thread-safe method to update overlay state and telemetry."""
         self.event_queue.put({
             "type": "state",
             "state": state,
@@ -394,14 +274,13 @@ class JarvisOverlayUI:
         })
 
     def set_subtitle(self, text: str):
-        """Thread-safe method to update subtitle/transcription text."""
+        """Thread-safe method to update directive transcription text."""
         self.event_queue.put({
             "type": "subtitle",
             "text": text
         })
 
     def set_language_badge(self, lang_name: str):
-        """Thread-safe method to update active language."""
         self.event_queue.put({
             "type": "lang",
             "lang": lang_name
@@ -443,9 +322,6 @@ class JarvisOverlayUI:
                     if self.subtitle_text:
                         self.show()
 
-                elif event_type == "lang":
-                    self.lang_badge.configure(text=event.get("lang", "EN"))
-
                 elif event_type == "close":
                     try:
                         self.root.destroy()
@@ -456,119 +332,183 @@ class JarvisOverlayUI:
             except queue.Empty:
                 break
 
-        # 2. Update UI widgets
+        # 2. Render Full Holographic Frame & Animations
         try:
-            self.lbl_status.configure(text=self.status_text)
-            self.lbl_subtitle.configure(text=self.subtitle_text)
-
-            # Update status colors & button highlights based on state
-            if self.state == STATE_LISTENING:
-                self.lbl_status.configure(fg=self.ACCENT_CYAN)
-                self.btn_mic.configure(bg=self.ACCENT_CYAN, text="🎙️")
-                self.logo_canvas.itemconfig(self.logo_dot, fill=self.ACCENT_CYAN)
-            elif self.state == STATE_THINKING:
-                self.lbl_status.configure(fg=self.ACCENT_PURPLE)
-                self.btn_mic.configure(bg=self.ACCENT_PURPLE, text="⚡")
-                self.logo_canvas.itemconfig(self.logo_dot, fill=self.ACCENT_PURPLE)
-            elif self.state == STATE_SPEAKING:
-                self.lbl_status.configure(fg="#38bdf8")
-                self.btn_mic.configure(bg="#2563eb", text="🔊")
-                self.logo_canvas.itemconfig(self.logo_dot, fill="#38bdf8")
-            elif self.state == STATE_OFFLINE:
-                self.lbl_status.configure(fg=self.ACCENT_RED)
-                self.btn_mic.configure(bg="#475569", text="💤")
-                self.logo_canvas.itemconfig(self.logo_dot, fill=self.ACCENT_RED)
-            else: # IDLE
-                self.lbl_status.configure(fg=self.TEXT_SECONDARY)
-                self.btn_mic.configure(bg=self.ACCENT_BLUE, text="🎙️")
-                self.logo_canvas.itemconfig(self.logo_dot, fill=self.ACCENT_BLUE)
-
-            # 3. Render animated Siri/Gemini style visualizer orb
-            self._render_orb_animation()
+            self._render_holographic_hud()
         except Exception:
             pass
 
-        # 4. Schedule next frame (~30 FPS)
+        # 3. Schedule next frame (~30 FPS)
         self.anim_frame += 1
         self.root.after(33, self._periodic_tick)
 
-    def _render_orb_animation(self):
-        """Draws dynamic multi-ring glowing orb based on assistant state."""
-        canvas = self.orb_canvas
+    def _render_holographic_hud(self):
+        """Draws the complete Stark Industries Arc Reactor HUD with rounded pill buttons."""
+        canvas = self.canvas
         canvas.delete("all")
-        cx = self.orb_size / 2
-        cy = self.orb_size / 2
+
+        w, h = 420, 520
+        cx, cy = w // 2, 175
         t = self.anim_frame * 0.08
 
-        if self.state == STATE_LISTENING:
-            # Pulsing Siri/Gemini Cyan Ripple
-            pulse1 = (math.sin(t * 2) + 1) / 2
-            pulse2 = (math.sin(t * 2 + 1.5) + 1) / 2
-            
-            # Outer ripples
-            r_outer = 45 + pulse1 * 18
-            canvas.create_oval(cx - r_outer, cy - r_outer, cx + r_outer, cy + r_outer, fill="", outline="#00e5ff", width=2)
-            
-            r_mid = 35 + pulse2 * 12
-            canvas.create_oval(cx - r_mid, cy - r_mid, cx + r_mid, cy + r_mid, fill="#083344", outline="#38bdf8", width=2)
-            
-            # Glowing core
-            r_core = 24 + pulse1 * 4
-            canvas.create_oval(cx - r_core, cy - r_core, cx + r_core, cy + r_core, fill="#00e5ff", outline="#cffafe", width=2)
-            
-            # Inner mic dot
-            canvas.create_oval(cx - 8, cy - 8, cx + 8, cy + 8, fill="#ffffff", outline="")
+        # 1. Outer chamfered sci-fi frame
+        self._draw_hud_frame(8, 8, w - 8, h - 8, cut=20)
 
-        elif self.state == STATE_THINKING:
-            # Swirling Magenta / Purple Orbital Rings
-            angle = t * 3
-            canvas.create_oval(cx - 48, cy - 48, cx + 48, cy + 48, fill="", outline="#4c1d95", width=1)
-            
-            # Orbiting nodes
-            for i in range(4):
-                a = angle + i * (math.pi / 2)
-                rad = 36 + math.sin(t * 3 + i) * 6
-                ox = cx + math.cos(a) * rad
-                oy = cy + math.sin(a) * rad
-                color = self.ACCENT_PURPLE if i % 2 == 0 else "#ec4899"
-                canvas.create_oval(ox - 7, oy - 7, ox + 7, oy + 7, fill=color, outline="")
+        # 2. Top Header
+        canvas.create_text(
+            w // 2, 32,
+            text="◈ S.T.A.R.K. INDUSTRIES // JARVIS HUD ◈",
+            fill=CYAN,
+            font=("Consolas", 10, "bold")
+        )
+        canvas.create_line(40, 48, w - 40, 48, fill=DARK_CYAN, width=1)
 
-            # Center core
-            r_core = 20 + math.sin(t * 4) * 3
-            canvas.create_oval(cx - r_core, cy - r_core, cx + r_core, cy + r_core, fill="#7e22ce", outline="#d8b4fe", width=2)
-
-        elif self.state == STATE_SPEAKING:
-            # Dynamic Audio Waveform Ring
-            canvas.create_oval(cx - 30, cy - 30, cx + 30, cy + 30, fill="#1e3a8a", outline="#60a5fa", width=2)
+        # 3. Rotating Sci-Fi Radar Ticks
+        rotation_offset = self.anim_frame * (2.5 if self.state == STATE_THINKING else 1.2)
+        for angle_deg in range(0, 360, 15):
+            cur_angle = angle_deg + rotation_offset
+            rad = math.radians(cur_angle)
+            r1, r2 = 100, 112
             
-            # Waveform bars around perimeter
-            num_bars = 16
-            for i in range(num_bars):
-                a = i * (2 * math.pi / num_bars)
-                height = 10 + 14 * abs(math.sin(t * 3 + i * 0.7))
-                x1 = cx + math.cos(a) * 34
-                y1 = cy + math.sin(a) * 34
-                x2 = cx + math.cos(a) * (34 + height)
-                y2 = cy + math.sin(a) * (34 + height)
-                canvas.create_line(x1, y1, x2, y2, fill="#38bdf8", width=3, capstyle="round")
+            # Color logic based on state
+            if self.state == STATE_THINKING:
+                color = PURPLE if angle_deg % 45 == 0 else DARK_CYAN
+            elif self.state == STATE_SPEAKING:
+                color = "#38bdf8" if angle_deg % 30 == 0 else DARK_CYAN
+            elif self.state == STATE_OFFLINE:
+                color = RED if angle_deg % 45 == 0 else "#450a0a"
+            else:
+                color = CYAN if angle_deg % 45 == 0 else (GOLD if angle_deg % 90 == 0 else DARK_CYAN)
                 
-            # Center bright core
-            canvas.create_oval(cx - 16, cy - 16, cx + 16, cy + 16, fill="#60a5fa", outline="#ffffff", width=2)
+            width = 2 if angle_deg % 45 == 0 else 1
+            canvas.create_line(
+                cx + r1 * math.cos(rad), cy + r1 * math.sin(rad),
+                cx + r2 * math.cos(rad), cy + r2 * math.sin(rad),
+                fill=color, width=width
+            )
 
-        elif self.state == STATE_OFFLINE:
-            # Dimmed red stopped indicator
-            canvas.create_oval(cx - 35, cy - 35, cx + 35, cy + 35, fill="#2a1215", outline="#7f1d1d", width=2)
-            canvas.create_oval(cx - 18, cy - 18, cx + 18, cy + 18, fill="#ef4444", outline="")
-            canvas.create_line(cx - 10, cy - 10, cx + 10, cy + 10, fill="#ffffff", width=3)
-            canvas.create_line(cx + 10, cy - 10, cx - 10, cy + 10, fill="#ffffff", width=3)
+        # 4. Concentric HUD Rings
+        canvas.create_oval(cx - 105, cy - 105, cx + 105, cy + 105, outline=DARK_CYAN, width=1)
+        canvas.create_oval(cx - 114, cy - 114, cx + 114, cy + 114, outline="#002233", width=1)
 
+        # 5. Acoustic Waveform Frequency Bars (Reacts dynamically)
+        for i in range(-5, 6):
+            if self.state in [STATE_LISTENING, STATE_SPEAKING]:
+                wave = abs(math.sin(t * 3 + abs(i) * 0.7))
+                bar_h = 8 + int(wave * 24)
+            elif self.state == STATE_THINKING:
+                wave = abs(math.sin(t * 4 + i))
+                bar_h = 6 + int(wave * 16)
+            else:
+                bar_h = 8 + (5 - abs(i)) * 3
+
+            bar_color = PURPLE if self.state == STATE_THINKING else (RED if self.state == STATE_OFFLINE else CYAN)
+            canvas.create_line(cx - 120, cy + i * 9, cx - 120 - bar_h, cy + i * 9, fill=bar_color, width=2)
+            canvas.create_line(cx + 120, cy + i * 9, cx + 120 + bar_h, cy + i * 9, fill=bar_color, width=2)
+
+        # 6. Center Triangular Arc Reactor Asset
+        if self._reactor_img_tk:
+            canvas.create_image(cx, cy, image=self._reactor_img_tk)
         else:
-            # IDLE - Gentle Breathing Ring
-            breath = (math.sin(t) + 1) / 2
-            r_b = 32 + breath * 5
-            canvas.create_oval(cx - 46, cy - 46, cx + 46, cy + 46, fill="", outline="#1e293b", width=1)
-            canvas.create_oval(cx - r_b, cy - r_b, cx + r_b, cy + r_b, fill="#1e2433", outline="#3b82f6", width=2)
-            canvas.create_oval(cx - 16, cy - 16, cx + 16, cy + 16, fill="#3b82f6", outline="")
+            # Fallback procedural Arc Reactor
+            canvas.create_oval(cx - 75, cy - 75, cx + 75, cy + 75, outline=CYAN, width=3)
+            p1 = (cx, cy + 50)
+            p2 = (cx - 45, cy - 35)
+            p3 = (cx + 45, cy - 35)
+            canvas.create_polygon([p1[0], p1[1], p2[0], p2[1], p3[0], p3[1]], fill="", outline=CYAN, width=4)
+
+        # 7. Dynamic Telemetry Status
+        status_color = CYAN
+        if self.state == STATE_THINKING:
+            status_color = PURPLE
+        elif self.state == STATE_SPEAKING:
+            status_color = "#38bdf8"
+        elif self.state == STATE_OFFLINE:
+            status_color = RED
+        elif self.state == STATE_IDLE:
+            status_color = "#94a3b8"
+
+        canvas.create_text(
+            w // 2, 305,
+            text=self.status_text,
+            fill=status_color,
+            font=("Segoe UI", 12, "bold")
+        )
+
+        # 8. Directive / Spoken Subtitles
+        sub_display = self.subtitle_text
+        if len(sub_display) > 80:
+            sub_display = sub_display[:77] + "..."
+        canvas.create_text(
+            w // 2, 345,
+            text=f'"{sub_display}"' if not sub_display.startswith('"') else sub_display,
+            fill=TEXT_WHITE,
+            font=("Segoe UI", 10, "italic"),
+            width=w - 60,
+            justify="center"
+        )
+
+        # 9. Three Smooth Rounded Pill Buttons (Stop, Talk, Turn Off)
+        btn_y1 = 390
+        btn_y2 = 435
+        btn_w = 110
+        gap = 14
+        start_x = (w - (btn_w * 3 + gap * 2)) // 2
+
+        # Button 1: STOP (Rounded Pill)
+        b1_x1 = start_x
+        b1_x2 = b1_x1 + btn_w
+        self._draw_rounded_pill(
+            b1_x1, btn_y1, b1_x2, btn_y2,
+            radius=18, tag="btn_stop",
+            fill="#0d2230", outline=CYAN, width=1.5
+        )
+        canvas.create_text(
+            (b1_x1 + b1_x2) // 2, (btn_y1 + btn_y2) // 2,
+            text="⏸ STOP", fill=CYAN,
+            font=("Segoe UI", 9, "bold"),
+            tags="btn_stop"
+        )
+
+        # Button 2: TALK (Rounded Pill)
+        b2_x1 = b1_x2 + gap
+        b2_x2 = b2_x1 + btn_w
+        talk_fill = CYAN if self.state == STATE_LISTENING else "#0284c7"
+        talk_text_color = "#000000" if self.state == STATE_LISTENING else "#ffffff"
+        self._draw_rounded_pill(
+            b2_x1, btn_y1, b2_x2, btn_y2,
+            radius=18, tag="btn_talk",
+            fill=talk_fill, outline="#38bdf8", width=2
+        )
+        canvas.create_text(
+            (b2_x1 + b2_x2) // 2, (btn_y1 + btn_y2) // 2,
+            text="🎙 TALK", fill=talk_text_color,
+            font=("Segoe UI", 9, "bold"),
+            tags="btn_talk"
+        )
+
+        # Button 3: TURN OFF (Rounded Pill)
+        b3_x1 = b2_x2 + gap
+        b3_x2 = b3_x1 + btn_w
+        self._draw_rounded_pill(
+            b3_x1, btn_y1, b3_x2, btn_y2,
+            radius=18, tag="btn_turnoff",
+            fill="#dc2626", outline="#f87171", width=2
+        )
+        canvas.create_text(
+            (b3_x1 + b3_x2) // 2, (btn_y1 + btn_y2) // 2,
+            text="📞 TURN OFF", fill="#ffffff",
+            font=("Segoe UI", 9, "bold"),
+            tags="btn_turnoff"
+        )
+
+        # 10. Telemetry Diagnostics Footer
+        canvas.create_text(
+            w // 2, 480,
+            text="SYS.TEMP: 37°C  |  PWR: 100%  |  STARK OS v4.2",
+            fill=DARK_CYAN,
+            font=("Consolas", 8, "bold")
+        )
 
 
 # Global singleton instance holder
