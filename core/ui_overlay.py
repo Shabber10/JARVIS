@@ -89,7 +89,7 @@ class JarvisOverlayUI:
 
         # Window dimensions & positioning (Centered on screen)
         width = 420
-        height = 520
+        height = 420
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
         pos_x = (screen_width - width) // 2
@@ -343,32 +343,20 @@ class JarvisOverlayUI:
         self.root.after(33, self._periodic_tick)
 
     def _render_holographic_hud(self):
-        """Draws the complete Stark Industries Arc Reactor HUD with rounded pill buttons."""
+        """Draws the clean floating Stark Industries Arc Reactor HUD with rounded pill buttons."""
         canvas = self.canvas
         canvas.delete("all")
 
-        w, h = 420, 520
-        cx, cy = w // 2, 175
+        w, h = 420, 420
+        cx, cy = w // 2, 135
         t = self.anim_frame * 0.08
 
-        # 1. Outer chamfered sci-fi frame
-        self._draw_hud_frame(8, 8, w - 8, h - 8, cut=20)
-
-        # 2. Top Header
-        canvas.create_text(
-            w // 2, 32,
-            text="◈ S.T.A.R.K. INDUSTRIES // JARVIS HUD ◈",
-            fill=CYAN,
-            font=("Consolas", 10, "bold")
-        )
-        canvas.create_line(40, 48, w - 40, 48, fill=DARK_CYAN, width=1)
-
-        # 3. Rotating Sci-Fi Radar Ticks
+        # 1. Rotating Sci-Fi Radar Ticks
         rotation_offset = self.anim_frame * (2.5 if self.state == STATE_THINKING else 1.2)
         for angle_deg in range(0, 360, 15):
             cur_angle = angle_deg + rotation_offset
             rad = math.radians(cur_angle)
-            r1, r2 = 100, 112
+            r1, r2 = 96, 108
             
             # Color logic based on state
             if self.state == STATE_THINKING:
@@ -387,26 +375,11 @@ class JarvisOverlayUI:
                 fill=color, width=width
             )
 
-        # 4. Concentric HUD Rings
-        canvas.create_oval(cx - 105, cy - 105, cx + 105, cy + 105, outline=DARK_CYAN, width=1)
-        canvas.create_oval(cx - 114, cy - 114, cx + 114, cy + 114, outline="#002233", width=1)
+        # 2. Concentric HUD Rings
+        canvas.create_oval(cx - 102, cy - 102, cx + 102, cy + 102, outline=DARK_CYAN, width=1)
+        canvas.create_oval(cx - 110, cy - 110, cx + 110, cy + 110, outline="#082333", width=1)
 
-        # 5. Acoustic Waveform Frequency Bars (Reacts dynamically)
-        for i in range(-5, 6):
-            if self.state in [STATE_LISTENING, STATE_SPEAKING]:
-                wave = abs(math.sin(t * 3 + abs(i) * 0.7))
-                bar_h = 8 + int(wave * 24)
-            elif self.state == STATE_THINKING:
-                wave = abs(math.sin(t * 4 + i))
-                bar_h = 6 + int(wave * 16)
-            else:
-                bar_h = 8 + (5 - abs(i)) * 3
-
-            bar_color = PURPLE if self.state == STATE_THINKING else (RED if self.state == STATE_OFFLINE else CYAN)
-            canvas.create_line(cx - 120, cy + i * 9, cx - 120 - bar_h, cy + i * 9, fill=bar_color, width=2)
-            canvas.create_line(cx + 120, cy + i * 9, cx + 120 + bar_h, cy + i * 9, fill=bar_color, width=2)
-
-        # 6. Center Triangular Arc Reactor Asset
+        # 3. Center Triangular Arc Reactor Asset
         if self._reactor_img_tk:
             canvas.create_image(cx, cy, image=self._reactor_img_tk)
         else:
@@ -417,7 +390,7 @@ class JarvisOverlayUI:
             p3 = (cx + 45, cy - 35)
             canvas.create_polygon([p1[0], p1[1], p2[0], p2[1], p3[0], p3[1]], fill="", outline=CYAN, width=4)
 
-        # 7. Dynamic Telemetry Status
+        # 4. Dynamic Telemetry Status
         status_color = CYAN
         if self.state == STATE_THINKING:
             status_color = PURPLE
@@ -429,18 +402,18 @@ class JarvisOverlayUI:
             status_color = "#94a3b8"
 
         canvas.create_text(
-            w // 2, 305,
+            w // 2, 260,
             text=self.status_text,
             fill=status_color,
             font=("Segoe UI", 12, "bold")
         )
 
-        # 8. Directive / Spoken Subtitles
+        # 5. Directive / Spoken Subtitles
         sub_display = self.subtitle_text
         if len(sub_display) > 80:
             sub_display = sub_display[:77] + "..."
         canvas.create_text(
-            w // 2, 345,
+            w // 2, 295,
             text=f'"{sub_display}"' if not sub_display.startswith('"') else sub_display,
             fill=TEXT_WHITE,
             font=("Segoe UI", 10, "italic"),
@@ -448,11 +421,11 @@ class JarvisOverlayUI:
             justify="center"
         )
 
-        # 9. Three Smooth Rounded Pill Buttons (Stop, Talk, Turn Off)
-        btn_y1 = 390
-        btn_y2 = 435
-        btn_w = 110
-        gap = 14
+        # 6. Three Smooth Rounded Pill Action Buttons (Stop, Talk, Turn Off)
+        btn_y1 = 338
+        btn_y2 = 380
+        btn_w = 112
+        gap = 12
         start_x = (w - (btn_w * 3 + gap * 2)) // 2
 
         # Button 1: STOP (Rounded Pill)
@@ -500,14 +473,6 @@ class JarvisOverlayUI:
             text="📞 TURN OFF", fill="#ffffff",
             font=("Segoe UI", 9, "bold"),
             tags="btn_turnoff"
-        )
-
-        # 10. Telemetry Diagnostics Footer
-        canvas.create_text(
-            w // 2, 480,
-            text="SYS.TEMP: 37°C  |  PWR: 100%  |  STARK OS v4.2",
-            fill=DARK_CYAN,
-            font=("Consolas", 8, "bold")
         )
 
 
