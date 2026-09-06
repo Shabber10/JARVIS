@@ -418,40 +418,53 @@ def send_whatsapp_message(recipient: str, message: str = "") -> str:
 
 def send_whatsapp_file(recipient: str, file_path: str, caption: str = "") -> str:
     """
-    Sends a file, photo, video, PDF, document, or audio to a WhatsApp contact or group.
-    Example: send_whatsapp_file("Arb Subhan", "C:/Users/SHABBER HUSSAIN/Desktop/report.pdf", "Here is the report")
+    Sends a file to a WhatsApp contact following the 2-step workflow:
+    1. Open/locate file and copy to clipboard as FileDrop.
+    2. Open recipient chat in WhatsApp, click composer, paste (Ctrl+V), and send with Ctrl+Enter.
+    Example: send_whatsapp_file("7899746857", "C:/Users/SHABBER HUSSAIN/Desktop/v1.pdf")
     """
     clean_recipient = recipient.strip()
     path_obj = Path(file_path).resolve()
     
     if not path_obj.exists() or not path_obj.is_file():
-        return f"Could not find file at: {file_path}, Boss."
+        # Check desktop if user just provided filename
+        desktop_alt = Path.home() / "Desktop" / file_path
+        if desktop_alt.exists() and desktop_alt.is_file():
+            path_obj = desktop_alt
+        else:
+            return f"Could not find file at: {file_path}, Boss."
 
     try:
-        # 1. Open chat
+        # Step 1: Copy file to clipboard as FileDrop
+        _set_clipboard_file(str(path_obj))
+        time.sleep(0.4)
+
+        # Step 2: Open recipient chat in WhatsApp (Full Screen, Search / Direct Open)
         ok, display_name = _open_chat(clean_recipient)
         if not ok:
             return f"Could not open WhatsApp chat for {clean_recipient}, Boss."
 
-        # 2. Put file on clipboard as FileDrop
-        _set_clipboard_file(str(path_obj))
+        time.sleep(1.0)
+
+        # Focus composer / message bar
+        _native_click(700, 1020)
         time.sleep(0.3)
 
-        # 3. Focus chat area and Paste (Ctrl+V)
-        _native_click(700, 955)
-        time.sleep(0.2)
+        # Paste the file (Ctrl + V)
         _press_key_with_ctrl('v')
-        time.sleep(1.5)
+        time.sleep(2.0)
 
-        # 4. If caption provided, paste caption
+        # If caption provided, paste caption
         if caption.strip():
             _set_clipboard(caption.strip())
             _press_key_with_ctrl('v')
-            time.sleep(0.3)
+            time.sleep(0.4)
 
-        # 5. Hit send (Enter and green Send button)
-        _trigger_send_action()
-        time.sleep(0.8)
+        # Send using Ctrl + Enter and Enter
+        _press_ctrl_enter_native()
+        time.sleep(0.3)
+        _press_enter_native()
+        time.sleep(0.5)
 
         return f"Successfully sent file '{path_obj.name}' to {display_name} on WhatsApp, Boss."
     except Exception as e:
