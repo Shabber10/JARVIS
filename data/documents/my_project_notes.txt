@@ -1,0 +1,8 @@
+Project Antigravity Voice Assistant
+Author: Shabber Hussain
+Goal: Create an intelligent voice-controlled desktop agent with RAG.
+Key features:
+1. Fast speech recognition and edge-tts neural voice feedback.
+2. ChromaDB vector database for searching local knowledge and notes.
+3. Windows automation for launching applications, adjusting volume, and browsing the web.
+Status: Active and in development.
