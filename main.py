@@ -118,6 +118,8 @@ Status: Active and fully functional.
                 break
                 
             if wake_detected:
+                if ui:
+                    ui.set_state(STATE_LISTENING, "Listening...", "Wake word detected...")
                 cmd = inline_cmd.strip()
                 
                 # Check immediate silence / stop command

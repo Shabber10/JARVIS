@@ -41,6 +41,7 @@ class JarvisOverlayUI:
         self._thread = None
         self._drag_start_x = 0
         self._drag_start_y = 0
+        self._auto_hide_id = None
 
     def start(self):
         """Starts the UI in a dedicated GUI thread."""
@@ -48,6 +49,17 @@ class JarvisOverlayUI:
         self._thread.start()
 
     def _run_tk(self):
+        # Ensure secondary thread is attached to the active interactive desktop on Windows
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                user32 = ctypes.windll.user32
+                hdesk = user32.OpenDesktopW('default', 0, False, 0x01FF)
+                if hdesk:
+                    user32.SetThreadDesktop(hdesk)
+            except Exception:
+                pass
+
         self.root = tk.Tk()
         self.root.title("JARVIS AI")
         self.root.overrideredirect(True)
@@ -254,6 +266,7 @@ class JarvisOverlayUI:
         self.ctrl_labels.place(x=20, y=390, width=width - 40)
 
         # Start periodic tick for animations and event queue processing
+        self._schedule_auto_hide(delay_ms=3500)
         self._periodic_tick()
         self.root.mainloop()
 
@@ -314,23 +327,60 @@ class JarvisOverlayUI:
             self.is_hidden = True
 
     def show(self):
-        """Ensures the window is visible and on top."""
+        """Ensures the window is visible, unminimized, topmost, and raised above all applications."""
+        self._cancel_auto_hide()
         if self.root:
             try:
                 self.root.deiconify()
+                self.root.lift()
                 self.root.attributes("-topmost", True)
                 self.is_hidden = False
+                
+                # Force Win32 Topmost & Foreground placement
+                if sys.platform == "win32":
+                    try:
+                        import ctypes
+                        user32 = ctypes.windll.user32
+                        hwnd = self.root.winfo_id()
+                        # HWND_TOPMOST = -1, SWP_NOMOVE = 0x0002, SWP_NOSIZE = 0x0001, SWP_SHOWWINDOW = 0x0040
+                        user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0040)
+                        user32.SetForegroundWindow(hwnd)
+                    except Exception:
+                        pass
             except Exception:
                 pass
 
     def hide(self):
-        """Hides the window."""
+        """Hides/withdraws the window into the background when inactive."""
+        self._cancel_auto_hide()
         if self.root:
             try:
                 self.root.withdraw()
                 self.is_hidden = True
             except Exception:
                 pass
+
+    def _schedule_auto_hide(self, delay_ms: int = 3000):
+        """Schedules the overlay to auto-hide after inactivity delay."""
+        if not self.root:
+            return
+        self._cancel_auto_hide()
+        self._auto_hide_id = self.root.after(delay_ms, self._do_auto_hide)
+
+    def _cancel_auto_hide(self):
+        """Cancels any pending auto-hide timer."""
+        if self.root and self._auto_hide_id:
+            try:
+                self.root.after_cancel(self._auto_hide_id)
+            except Exception:
+                pass
+            self._auto_hide_id = None
+
+    def _do_auto_hide(self):
+        """Executes auto-hide if system is currently idle."""
+        self._auto_hide_id = None
+        if self.state in [STATE_IDLE, STATE_OFFLINE]:
+            self.hide()
 
     # ---------------- Thread-Safe API ----------------
 
@@ -381,9 +431,12 @@ class JarvisOverlayUI:
                     if event.get("subtitle_text") is not None:
                         self.subtitle_text = event["subtitle_text"]
                     
-                    # Auto-show overlay when active
+                    # Auto pop-up overlay when active (Listening, Thinking, Speaking)
                     if self.state in [STATE_LISTENING, STATE_THINKING, STATE_SPEAKING]:
                         self.show()
+                    elif self.state == STATE_IDLE:
+                        # Auto-hide after 3 seconds of idle so screen remains unobstructed
+                        self._schedule_auto_hide(delay_ms=3000)
 
                 elif event_type == "subtitle":
                     self.subtitle_text = event.get("text", "")

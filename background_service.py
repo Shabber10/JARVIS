@@ -88,6 +88,8 @@ def start_background_daemon():
                 break
                 
             if wake_detected:
+                if ui:
+                    ui.set_state(STATE_LISTENING, "Listening...", "Wake word detected...")
                 command_to_run = inline_command.strip()
                 
                 # Check immediate silence / stop command
