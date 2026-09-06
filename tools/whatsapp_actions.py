@@ -400,8 +400,8 @@ def send_whatsapp_message(recipient: str, message: str = "") -> str:
         if not ok:
             return f"Could not open WhatsApp chat for {clean_recipient}, Boss."
 
-        # Click message input bar at (700, 1020)
-        _native_click(700, 1020)
+        # Click message input bar at (1000, 1025)
+        _native_click(1000, 1025)
         time.sleep(0.2)
 
         # Paste message via clipboard
@@ -446,8 +446,8 @@ def send_whatsapp_file(recipient: str, file_path: str, caption: str = "") -> str
 
         time.sleep(1.0)
 
-        # Focus composer / message bar
-        _native_click(700, 1020)
+        # Focus composer / message bar at (1000, 1025)
+        _native_click(1000, 1025)
         time.sleep(0.3)
 
         # Paste the file (Ctrl + V)
